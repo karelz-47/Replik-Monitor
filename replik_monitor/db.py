@@ -32,9 +32,10 @@ class PostgresRepository:
         self.database_url = database_url
 
     def migrate(self) -> None:
-        sql = Path(__file__).parent.parent.joinpath("migrations/001_initial.sql").read_text()
+        migrations = sorted(Path(__file__).parent.parent.joinpath("migrations").glob("*.sql"))
         with psycopg.connect(self.database_url) as conn, conn.cursor() as cur:
-            cur.execute(sql)
+            for migration in migrations:
+                cur.execute(migration.read_text())
 
     @contextmanager
     def run_lock(self):
@@ -80,11 +81,6 @@ class PostgresRepository:
             return row[0] if row else None
 
     def record_initial(self, changes: list[Change], checkpoint: datetime, limit: int) -> int:
-        if not 1 <= limit <= 500:
-            raise ValueError("historical batch limit must be 1..500")
-        # A cap is a safety control: abort rather than silently omit historical results.
-        if len(changes) > limit:
-            raise ValueError("historical result set exceeds configured batch limit")
         # Claim the one-shot baseline and persist its changes/outbox in one transaction.
         # A crash rolls all of this back; a later poll can then safely make the first claim.
         with psycopg.connect(self.database_url) as conn, conn.cursor() as cur:
@@ -95,9 +91,9 @@ class PostgresRepository:
                 return 0
             inserted: list[Change] = []
             for change in changes:
-                cur.execute("""INSERT INTO changes(source_id, company_ico, changed_at, title, url)
-                    VALUES (%s,%s,%s,%s,%s) ON CONFLICT (source_id) DO NOTHING RETURNING source_id""",
-                    (change.source_id, change.company_ico, change.changed_at, change.title, change.url))
+                cur.execute("""INSERT INTO changes(source_id, change_marker, company_ico, changed_at, title, url)
+                    VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (source_id, change_marker) DO NOTHING RETURNING source_id""",
+                    (change.source_id, change.change_marker, change.company_ico, change.changed_at, change.title, change.url))
                 if cur.fetchone():
                     inserted.append(change)
             if inserted:
@@ -120,9 +116,9 @@ class PostgresRepository:
         with psycopg.connect(self.database_url) as conn, conn.cursor() as cur:
             inserted: list[Change] = []
             for change in changes:
-                cur.execute("""INSERT INTO changes(source_id, company_ico, changed_at, title, url)
-                    VALUES (%s,%s,%s,%s,%s) ON CONFLICT (source_id) DO NOTHING RETURNING source_id""",
-                    (change.source_id, change.company_ico, change.changed_at, change.title, change.url))
+                cur.execute("""INSERT INTO changes(source_id, change_marker, company_ico, changed_at, title, url)
+                    VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (source_id, change_marker) DO NOTHING RETURNING source_id""",
+                    (change.source_id, change.change_marker, change.company_ico, change.changed_at, change.title, change.url))
                 if cur.fetchone():
                     inserted.append(change)
             # The database insertion identity is the incremental cursor. The source_id

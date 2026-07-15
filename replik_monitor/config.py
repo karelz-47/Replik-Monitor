@@ -42,8 +42,8 @@ class Settings:
         if expires_at <= datetime.now(UTC) or expires_at > datetime.now(UTC) + MAX_MONITOR_LIFETIME:
             raise ValueError("MONITOR_EXPIRES_AT must be future and no more than 31 days away")
         limit = int(os.getenv("MONITOR_HISTORICAL_BATCH_LIMIT", "100"))
-        if not 1 <= limit <= 500:
-            raise ValueError("MONITOR_HISTORICAL_BATCH_LIMIT must be 1..500")
+        if not 1 <= limit <= 100:
+            raise ValueError("MONITOR_HISTORICAL_BATCH_LIMIT must be 1..100 (REPLIK page maximum)")
         overlap = int(os.getenv("POLL_OVERLAP_MINUTES", "10"))
         stale = int(os.getenv("MONITOR_STALE_AFTER_MINUTES", "90"))
         if overlap < 0 or stale < 1:

@@ -11,6 +11,7 @@ class Change:
     changed_at: datetime
     title: str
     url: str
+    change_marker: str = ""
 
 
 def select_unseen(changes: Iterable[Change], known_source_ids: set[str]) -> list[Change]:

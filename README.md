@@ -7,18 +7,18 @@ This is a bounded Python monitor for the official public IS REPLIK SOAP 1.1 cont
 - Production WSDL: `https://replik-ws.justice.sk/ru-verejnost-ws/konanieService.wsdl`
 - Production SOAP endpoint: `https://replik-ws.justice.sk/ru-verejnost-ws/`
 - Binding: SOAP 1.1 document/literal, `Content-Type: text/xml; charset=utf-8`, `SOAPAction: ""`.
-- Sync request: `vyhladajPoslednuZmenuOdRequest` with `ZmenyOd` (`xsd:dateTime`) and `MaximalnyPocetVysledkov` (`xsd:int`).
-- Sync response: `PoslednaZmenaNaKonani` attributes `KonanieId` and `PoslednaZmena`.
-- Detail request: `getKonanieDetailRequest` with `KonanieId`; debtor ICO is read from `Konanie/Dlznik/Ico`.
+- IČO discovery request: `getKonaniePodlaICORequest` with `Ico`, zero-based `Stranka`, `VysledkovNaStranku` (maximum `100`), and `TypTriedenia=DatumPoslednejUdalosti`.
+- IČO discovery response: `KonanieInfoList/KonanieInfo` plus `VysledkovCelkom`; each info contains `Id`, `DlznikIco`, and `DatumPoslednejUdalosti` (`xsd:date`).
+- Detail request: `getKonanieDetailRequest` with `KonanieId` remains available, but is not used to pre-filter a global feed.
 
-The client makes the bounded sync request, then calls `getKonanieDetail` for each returned proceeding so it can filter on the configured monitor's debtor ICO (`47251301`). It uses `KonanieId` as the durable source identity and the API's timezone-qualified `PoslednaZmena` as the change timestamp.
+The client reconciles every stable, paginated `getKonaniePodlaICO` page for the configured exact debtor IČO (`47251301`). It never uses the global `vyhladajPoslednuZmenuOd` feed, so unrelated market-wide changes cannot trigger a 500-result abort. A durable identity consists of `KonanieInfo/Id` and a hash of its complete published state (including last-event date); this catches later amendments to an already-known proceeding even though the list contract exposes a date rather than a timestamp.
 
 ## Safety controls
 
 - PostgreSQL owns migrations, an advisory poll lock, source-identity deduplication, durable outbox retry, and idempotency keys for Resend.
-- `MONITOR_HISTORICAL_BATCH_LIMIT` is passed to the API as `MaximalnyPocetVysledkov` (default `100`, range `1..500`), keeping first and later fetches bounded. If the unfiltered official sync response reaches that exact cap, the poll fails closed with a redacted `sync-overflow` status before any checkpoint, baseline, outbox, or new delivery state can advance; narrow the time window or raise an approved limit before retrying.
+- `MONITOR_HISTORICAL_BATCH_LIMIT` controls `VysledkovNaStranku` (default `100`, range `1..100`). Every `getKonaniePodlaICO` page is reconciled; `VysledkovCelkom` may exceed 500 without being treated as an error. The client retries a bounded number of times if page totals or page boundaries change during the snapshot.
 - The first successful poll transactionally claims one historical baseline and at most one historical digest. Later polls wait while it is pending/retrying; they cannot create a second historical digest.
-- `changes.source_id` is the external `KonanieId`; overlap polling cannot resend an existing identity.
+- `changes` deduplicates on proceeding ID plus a canonical public-state marker, so overlap polling cannot resend an unchanged state but does preserve later proceeding events.
 - `MONITOR_EXPIRES_AT` must be future and within 31 days. Its first accepted value is persisted, so changing an environment value cannot extend an active monitor.
 - `/healthz` returns 200 only when the database is reachable and the monitor is active. `/checkpoint` separates scheduler freshness from web readiness.
 

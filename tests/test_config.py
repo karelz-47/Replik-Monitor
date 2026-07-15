@@ -16,7 +16,7 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(100, Settings.from_env().historical_batch_limit)
         env = self.env() | {"MONITOR_HISTORICAL_BATCH_LIMIT": "501"}
         with patch.dict(os.environ, env, clear=True):
-            with self.assertRaisesRegex(ValueError, "1..500"):
+            with self.assertRaisesRegex(ValueError, "1..100"):
                 Settings.from_env()
 
     def test_deadline_cannot_be_more_than_one_month_away(self):
