@@ -140,16 +140,35 @@ class ReplikSoapClient:
         # IČO operation has no time cursor, therefore every poll reconciles its pages.
         del since
         for _attempt in range(MAX_RECONCILIATION_ATTEMPTS):
-            first, total = parse_ico_page(self._post(build_ico_page_envelope(ico, 0, max_results)), ico, self.portal_url)
-            pages = [first]
-            for page in range(1, (total + max_results - 1) // max_results):
-                rows, page_total = parse_ico_page(self._post(build_ico_page_envelope(ico, page, max_results)), ico, self.portal_url)
-                if page_total != total:
-                    break
-                pages.append(rows)
-            else:
-                flattened = [change for page_rows in pages for change in page_rows]
-                # Duplicate IDs across a stable snapshot signal a page-boundary race.
-                if len({change.source_id for change in flattened}) == len(flattened) and len(flattened) == total:
-                    return FetchChangesResult(flattened, total)
+            try:
+                first_snapshot = self._collect_snapshot(ico, max_results)
+                second_snapshot = self._collect_snapshot(ico, max_results)
+            except RuntimeError:
+                # A page total, identity set, or boundary may move while collecting.
+                # Retry the entire pair, never a partial result.
+                continue
+            # Counts and duplicate detection alone permit a mixed page-boundary
+            # snapshot with an unchanged total. Require two complete collections to
+            # expose the identical ordered proceeding identity/state sequence.
+            if self._snapshot_fingerprint(first_snapshot[0]) == self._snapshot_fingerprint(second_snapshot[0]):
+                return FetchChangesResult(first_snapshot[0], first_snapshot[1])
         raise RuntimeError("REPLIK IČO pagination did not stabilize after bounded reconciliation")
+
+    def _collect_snapshot(self, ico: str, max_results: int) -> tuple[list[Change], int]:
+        first, total = parse_ico_page(self._post(build_ico_page_envelope(ico, 0, max_results)), ico, self.portal_url)
+        pages = [first]
+        for page in range(1, (total + max_results - 1) // max_results):
+            rows, page_total = parse_ico_page(self._post(build_ico_page_envelope(ico, page, max_results)), ico, self.portal_url)
+            if page_total != total:
+                raise RuntimeError("REPLIK IČO page total changed during snapshot")
+            pages.append(rows)
+        flattened = [change for page_rows in pages for change in page_rows]
+        # Duplicate IDs or a filtered/short page are unsafe: do not persist a partial
+        # company baseline as though it were a complete server snapshot.
+        if len({change.source_id for change in flattened}) != len(flattened) or len(flattened) != total:
+            raise RuntimeError("REPLIK IČO snapshot has duplicate or missing proceedings")
+        return flattened, total
+
+    @staticmethod
+    def _snapshot_fingerprint(changes: list[Change]) -> tuple[tuple[str, str], ...]:
+        return tuple((change.source_id, change.change_marker) for change in changes)

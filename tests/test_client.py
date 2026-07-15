@@ -33,7 +33,7 @@ class OfficialSoapContractTests(unittest.TestCase):
             result = client.fetch_changes("47251301", datetime(2026, 1, 1, tzinfo=UTC), 100)
         self.assertEqual(501, result.response_count)
         self.assertEqual(501, len(result.changes))
-        self.assertEqual([0, 1, 2, 3, 4, 5], requests)
+        self.assertEqual([0, 1, 2, 3, 4, 5] * 2, requests)
         self.assertEqual("https://replik.justice.sk/ru-verejnost-web/pages/konanieDetail.xhtml?konanieId=0", result.changes[0].url)
 
     def test_exact_ico_and_same_proceeding_newer_public_state_marker(self):
@@ -42,6 +42,23 @@ class OfficialSoapContractTests(unittest.TestCase):
         self.assertEqual(["42"], [item.source_id for item in first])
         self.assertNotEqual(first[0].change_marker, second[0].change_marker)
         self.assertGreater(second[0].changed_at, first[0].changed_at)
+
+    def test_client_rejects_same_total_snapshot_with_shifted_page_boundaries(self):
+        client = ReplikSoapClient()
+        collections = [(('a',), ('c',)), (('b',), ('d',))] * 3
+        requests = []
+
+        def fake_post(envelope):
+            page = int(next(item.text for item in ET.fromstring(envelope).iter() if item.tag.endswith("Stranka")))
+            collection = len(requests) // 2
+            requests.append(page)
+            ident = collections[collection][page][0]
+            return page_xml([(ident, "47251301", "2026-06-01", f"event {ident}")], 2)
+
+        with patch.object(client, "_post", side_effect=fake_post):
+            with self.assertRaisesRegex(RuntimeError, "did not stabilize"):
+                client.fetch_changes("47251301", datetime(2026, 1, 1, tzinfo=UTC), 1)
+        self.assertEqual([0, 1] * 6, requests)
 
     def test_post_uses_verified_endpoint_and_wsdl_empty_soap_action(self):
         class Response:

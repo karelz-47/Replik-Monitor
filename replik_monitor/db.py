@@ -27,6 +27,15 @@ def format_digest(changes: Iterable[Change], mode: str) -> tuple[str, str]:
     return subject, body
 
 
+HISTORICAL_DIGEST_MAX_RECORDS = 100
+
+
+def initial_digest_batches(changes: list[Change]) -> list[list[Change]]:
+    """Fixed email bound; SOAP page size must not enlarge a delivered message."""
+    return [changes[start:start + HISTORICAL_DIGEST_MAX_RECORDS]
+            for start in range(0, len(changes), HISTORICAL_DIGEST_MAX_RECORDS)]
+
+
 class PostgresRepository:
     def __init__(self, database_url: str):
         self.database_url = database_url
@@ -97,9 +106,13 @@ class PostgresRepository:
                 if cur.fetchone():
                     inserted.append(change)
             if inserted:
-                subject, body = format_digest(inserted, "historical")
-                cur.execute("""INSERT INTO outbox(mode, subject, body, source_count)
-                               VALUES ('historical', %s, %s, %s)""", (subject, body, len(inserted)))
+                # One durable outbox item per bounded batch. All records are inserted
+                # before delivery begins, so retries use each item's durable ID as its
+                # provider idempotency key and no discovered proceeding is omitted.
+                for batch in initial_digest_batches(inserted):
+                    subject, body = format_digest(batch, "historical")
+                    cur.execute("""INSERT INTO outbox(mode, subject, body, source_count)
+                                   VALUES ('historical', %s, %s, %s)""", (subject, body, len(batch)))
             else:
                 # No email exists to acknowledge. This must be durable before later polls
                 # choose the incremental path.
@@ -160,9 +173,14 @@ class PostgresRepository:
             with psycopg.connect(self.database_url) as conn, conn.cursor() as cur:
                 cur.execute("UPDATE outbox SET status='sent', provider_id=%s, sent_at=now(), last_error=NULL WHERE id=%s", (provider_id, outbox_id))
                 if mode == "historical":
-                    cur.execute("""INSERT INTO monitor_state(name, value)
-                                   VALUES ('initial_baseline_complete_at', now()::text)
-                                   ON CONFLICT (name) DO NOTHING""")
+                    # Do not release the initial lifecycle after only the first batch:
+                    # incremental polling begins only after every historical outbox
+                    # item is sent. Failed/retrying batches therefore remain durable.
+                    cur.execute("SELECT EXISTS(SELECT 1 FROM outbox WHERE mode='historical' AND status != 'sent')")
+                    if not cur.fetchone()[0]:
+                        cur.execute("""INSERT INTO monitor_state(name, value)
+                                       VALUES ('initial_baseline_complete_at', now()::text)
+                                       ON CONFLICT (name) DO NOTHING""")
                 delivered += 1
 
     def health(self, now: datetime, stale_after_minutes: int) -> dict:

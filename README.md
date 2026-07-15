@@ -16,8 +16,8 @@ The client reconciles every stable, paginated `getKonaniePodlaICO` page for the 
 ## Safety controls
 
 - PostgreSQL owns migrations, an advisory poll lock, source-identity deduplication, durable outbox retry, and idempotency keys for Resend.
-- `MONITOR_HISTORICAL_BATCH_LIMIT` controls `VysledkovNaStranku` (default `100`, range `1..100`). Every `getKonaniePodlaICO` page is reconciled; `VysledkovCelkom` may exceed 500 without being treated as an error. The client retries a bounded number of times if page totals or page boundaries change during the snapshot.
-- The first successful poll transactionally claims one historical baseline and at most one historical digest. Later polls wait while it is pending/retrying; they cannot create a second historical digest.
+- `MONITOR_HISTORICAL_BATCH_LIMIT` controls `VysledkovNaStranku` (default `100`, range `1..100`). Every `getKonaniePodlaICO` page is reconciled; `VysledkovCelkom` may exceed 500 without being treated as an error. The client accepts a snapshot only after two full collections have identical ordered proceeding identity/state sequences; page-total, duplicate, short-page, or cross-collection mismatch retries a bounded number of times and then fails closed.
+- The first successful poll transactionally claims one historical baseline. It creates one durable historical outbox item per at-most-100-record digest, in deterministic sorted order; all records are persisted before delivery. Each item retries with its own durable Resend idempotency key, and incremental polling remains blocked until every historical item is sent—there is no unbounded initial email and no silent omission.
 - `changes` deduplicates on proceeding ID plus a canonical public-state marker, so overlap polling cannot resend an unchanged state but does preserve later proceeding events.
 - `MONITOR_EXPIRES_AT` must be future and within 31 days. Its first accepted value is persisted, so changing an environment value cannot extend an active monitor.
 - `/healthz` returns 200 only when the database is reachable and the monitor is active. `/checkpoint` separates scheduler freshness from web readiness.
@@ -32,7 +32,7 @@ Optional names:
 
 - `REPLIK_ENDPOINT`: defaults to the verified official production SOAP endpoint above.
 - `REPLIK_PORTAL_URL`: defaults to verified official public portal landing URL `https://replik.justice.sk/ru-verejnost-web/`.
-- `MONITOR_HISTORICAL_BATCH_LIMIT`: default `100`, range `1..500`.
+- `MONITOR_HISTORICAL_BATCH_LIMIT`: default `100`, range `1..100`.
 - `POLL_OVERLAP_MINUTES`: default `10`.
 - `MONITOR_STALE_AFTER_MINUTES`: default `90`.
 - `DRY_RUN`: default `false`.

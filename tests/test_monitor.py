@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 from replik_monitor.client import FetchChangesResult
 from replik_monitor.config import Settings
+from replik_monitor.db import HISTORICAL_DIGEST_MAX_RECORDS, initial_digest_batches
 from replik_monitor.domain import Change
 from replik_monitor.service import poll_once
 
@@ -35,7 +36,7 @@ class MonitorLifecycleTests(unittest.TestCase):
         self.a = Change("b", "47251301", self.now - timedelta(hours=1), "B", "https://example.test/b", "state-b")
         self.b = Change("a", "47251301", self.now - timedelta(hours=2), "A", "https://example.test/a", "state-a")
 
-    def test_initial_poll_accepts_ico_total_over_500_and_creates_one_sorted_digest(self):
+    def test_initial_poll_accepts_ico_total_over_500_without_loss(self):
         changes = [Change(str(i), "47251301", self.now, "case", f"https://example.test/{i}", f"state-{i}") for i in range(501)]
         repo, client = LifecycleRepo(), FakeClient(changes, response_count=501)
         result = poll_once(client, repo, self.settings, self.now)
@@ -43,6 +44,13 @@ class MonitorLifecycleTests(unittest.TestCase):
         self.assertEqual(501, result["inserted"])
         self.assertEqual(1, len(repo.calls))
         self.assertEqual(100, client.max_results)
+
+    def test_historical_delivery_over_500_is_split_into_bounded_complete_digests(self):
+        changes = [Change(str(i), "47251301", self.now, f"case {i}", f"https://example.test/{i}", f"state-{i}") for i in range(501)]
+        batches = initial_digest_batches(changes)
+        self.assertEqual([100, 100, 100, 100, 100, 1], [len(batch) for batch in batches])
+        self.assertTrue(all(len(batch) <= HISTORICAL_DIGEST_MAX_RECORDS for batch in batches))
+        self.assertEqual([item.source_id for batch in batches for item in batch], [str(i) for i in range(501)])
 
     def test_pending_initial_delivery_is_idempotent(self):
         repo, client = LifecycleRepo(), FakeClient([self.a])
