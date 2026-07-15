@@ -100,6 +100,8 @@ class MigrationCompatibilityTests(unittest.TestCase):
             "CREATE UNIQUE INDEX IF NOT EXISTS changes_proceeding_state_idx",
             "ALTER TABLE outbox DROP CONSTRAINT IF EXISTS outbox_source_count_check",
             "CHECK (source_count >= 1)",
+            "DO $$",
+            "WHEN duplicate_object THEN NULL",
         ):
             self.assertIn(statement, migration)
 

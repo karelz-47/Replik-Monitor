@@ -5,4 +5,9 @@ ALTER TABLE changes ALTER COLUMN change_marker SET NOT NULL;
 ALTER TABLE changes DROP CONSTRAINT IF EXISTS changes_pkey;
 CREATE UNIQUE INDEX IF NOT EXISTS changes_proceeding_state_idx ON changes(source_id, change_marker);
 ALTER TABLE outbox DROP CONSTRAINT IF EXISTS outbox_source_count_check;
-ALTER TABLE outbox ADD CONSTRAINT outbox_source_count_check CHECK (source_count >= 1);
+DO $$
+BEGIN
+  ALTER TABLE outbox ADD CONSTRAINT outbox_source_count_check CHECK (source_count >= 1);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
