@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:r="datatypes.konanie.verejnost.ru.sk.hp.com">
+  <soap:Body>
+    <r:vyhladajPoslednuZmenuOdResponse>
+      <r:PoslednaZmenaNaKonaniList>
+        <r:PoslednaZmenaNaKonani KonanieId="31415" PoslednaZmena="2026-06-01T11:00:00Z" />
+        <r:PoslednaZmenaNaKonani KonanieId="27182" PoslednaZmena="2026-06-01T12:00:00+02:00" />
+      </r:PoslednaZmenaNaKonaniList>
+    </r:vyhladajPoslednuZmenuOdResponse>
+  </soap:Body>
+</soap:Envelope>

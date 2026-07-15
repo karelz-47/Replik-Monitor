@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:r="datatypes.konanie.verejnost.ru.sk.hp.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <soap:Body>
+    <r:getKonanieDetailResponse>
+      <r:Konanie>
+        <r:Id>31415</r:Id>
+        <r:SpisovaZnackaSpravcu>1K/42/2026</r:SpisovaZnackaSpravcu>
+        <r:SpisovaZnackaSudu>42R/2026</r:SpisovaZnackaSudu>
+        <r:Dlznik xsi:type="r:PravnickaOsoba">
+          <r:ObchodneMeno>Example, s. r. o.</r:ObchodneMeno>
+          <r:Ico>47251301</r:Ico>
+        </r:Dlznik>
+      </r:Konanie>
+    </r:getKonanieDetailResponse>
+  </soap:Body>
+</soap:Envelope>

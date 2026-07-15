@@ -7,7 +7,7 @@ from .config import Settings
 from .db import ExpiredMonitorError, PostgresRepository
 from .delivery import ResendAdapter
 from .http import serve
-from .service import poll_once, utcnow
+from .service import SyncOverflowError, overflow_status, poll_once, utcnow
 
 
 def main() -> None:
@@ -29,12 +29,15 @@ def main() -> None:
                 if not acquired:
                     print(json.dumps({"status": "skipped", "reason": "another run holds advisory lock"}))
                     return
-                client = ReplikSoapClient(settings.replik_endpoint, settings.replik_action)
+                client = ReplikSoapClient(settings.replik_endpoint, settings.replik_portal_url)
                 print(json.dumps(poll_once(client, repository, settings, utcnow())))
             return
         repository.ensure_active(settings.expires_at, utcnow())
         adapter = ResendAdapter(settings.resend_api_key, settings.resend_from, settings.alert_to)
         print(json.dumps({"delivered": repository.deliver_pending(adapter, utcnow())}))
+    except SyncOverflowError as exc:
+        print(json.dumps(overflow_status(exc)))
+        raise SystemExit(2)
     except ExpiredMonitorError as exc:
         print(json.dumps({"status": "expired", "detail": str(exc)}))
         raise SystemExit(2)

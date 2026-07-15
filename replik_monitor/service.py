@@ -4,6 +4,26 @@ from datetime import UTC, datetime, timedelta
 COMPANY_ICO = "47251301"
 
 
+class SyncOverflowError(RuntimeError):
+    """The capped no-cursor feed may have omitted records; persistence must stop."""
+
+    def __init__(self, limit: int):
+        super().__init__(
+            f"REPLIK sync possible overflow at configured limit {limit}; "
+            "do not advance checkpoint or deliver a digest; narrow the sync window or raise the approved limit"
+        )
+        self.limit = limit
+
+
+def overflow_status(error: SyncOverflowError) -> dict:
+    """Safe scheduler output: no SOAP payload, case IDs, titles, or recipient data."""
+    return {
+        "status": "sync-overflow",
+        "limit": error.limit,
+        "action": "narrow the sync window or raise the approved limit, then rerun",
+    }
+
+
 def utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -20,7 +40,12 @@ def poll_once(client, repository, settings, now: datetime | None = None) -> dict
                 "expires_at": expiry.isoformat()}
     initial = lifecycle == "new"
     since = settings.historical_since if initial else (repository.checkpoint() or now) - timedelta(minutes=settings.poll_overlap_minutes)
-    changes = client.fetch_changes(COMPANY_ICO, since)
+    fetched = client.fetch_changes(COMPANY_ICO, since, settings.historical_batch_limit)
+    # A response equal to the caller-provided cap is ambiguous because this official
+    # operation has no cursor/page token. Fail closed before database/outbox mutation.
+    if fetched.response_count >= settings.historical_batch_limit:
+        raise SyncOverflowError(settings.historical_batch_limit)
+    changes = fetched.changes
     # Deterministic presentation avoids a provider/API ordering accident changing a digest.
     changes.sort(key=lambda item: (item.changed_at, item.source_id))
     if settings.dry_run:

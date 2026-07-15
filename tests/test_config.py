@@ -9,7 +9,7 @@ from replik_monitor.config import Settings
 class ConfigurationTests(unittest.TestCase):
     def env(self):
         now = datetime.now(UTC)
-        return {"DATABASE_URL": "postgresql://unused", "REPLIK_ENDPOINT": "https://example.test/soap", "RESEND_API_KEY": "test-key", "RESEND_FROM": "sender-value", "ALERT_TO": "recipient-value", "MONITOR_EXPIRES_AT": (now + timedelta(days=1)).isoformat(), "MONITOR_HISTORICAL_SINCE": (now - timedelta(days=1)).isoformat()}
+        return {"DATABASE_URL": "postgresql://unused", "RESEND_API_KEY": "test-key", "RESEND_FROM": "sender-value", "ALERT_TO": "recipient-value", "MONITOR_EXPIRES_AT": (now + timedelta(days=1)).isoformat(), "MONITOR_HISTORICAL_SINCE": (now - timedelta(days=1)).isoformat()}
 
     def test_settings_require_env_only_values_and_valid_limit(self):
         with patch.dict(os.environ, self.env(), clear=True):

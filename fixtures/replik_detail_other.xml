@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:r="datatypes.konanie.verejnost.ru.sk.hp.com">
+  <soap:Body>
+    <r:getKonanieDetailResponse>
+      <r:Konanie>
+        <r:Id>27182</r:Id>
+        <r:SpisovaZnackaSpravcu>1K/99/2026</r:SpisovaZnackaSpravcu>
+        <r:Dlznik><r:ObchodneMeno>Another company</r:ObchodneMeno><r:Ico>00000000</r:Ico></r:Dlznik>
+      </r:Konanie>
+    </r:getKonanieDetailResponse>
+  </soap:Body>
+</soap:Envelope>
