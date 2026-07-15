@@ -78,7 +78,13 @@ python -m unittest discover -s tests -v
 python -m compileall -q replik_monitor tests
 ```
 
-The unit suite uses live-contract-shaped SOAP fixtures, mocked HTTP request capture, and fake integration seams. It does not connect to PostgreSQL, Railway, or Resend. The endpoint/WSDL verification is a safe API query with a future `ZmenyOd`, so it returns no records.
+The default suite uses live-contract-shaped SOAP fixtures, mocked HTTP request capture, and fake integration seams. It does not connect to PostgreSQL, Railway, or Resend. `tests/test_migration_compatibility.py` also preserves and checks the exact published 0.2.1 schema and migration ordering without a database. For an integration-grade PostgreSQL upgrade and fresh-schema check, provide an isolated, non-production database URL whose role may create and drop schemas:
+
+```sh
+REPLIK_TEST_DATABASE_URL='postgresql://…' python -m unittest discover -s tests -p 'test_migration_compatibility.py' -v
+```
+
+No local PostgreSQL service is required for the standard suite; the real-database tests skip with their reason when that explicit URL is absent. The endpoint/WSDL verification is a safe API query with a future `ZmenyOd`, so it returns no records.
 
 ## Operations
 

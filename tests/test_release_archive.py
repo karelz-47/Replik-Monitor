@@ -14,7 +14,8 @@ class ReleaseArchiveTests(unittest.TestCase):
         required = {
             "Dockerfile", "README.md", "railway.toml", "requirements.txt",
             "replik_monitor/db.py", "replik_monitor/http.py", "replik_monitor/service.py", "replik_monitor/cli.py",
-            "tests/test_monitor.py", "tests/test_cli.py",
+            "migrations/001_initial.sql", "migrations/002_change_marker.sql",
+            "tests/test_monitor.py", "tests/test_cli.py", "tests/test_migration_compatibility.py",
         }
         forbidden = re.compile(rb"(?:sk_live_|re_[A-Za-z0-9]{8,}|@novis|recipient@example\.com)")
         with tarfile.open(archive, "r:gz") as bundle:

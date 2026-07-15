@@ -5,9 +5,12 @@ from pathlib import Path
 
 class DeploymentArtifactTests(unittest.TestCase):
     def test_schema_has_durable_identity_outbox_and_expiry_state(self):
-        migration = Path("migrations/001_initial.sql").read_text()
-        for required in ("source_id text NOT NULL", "change_marker text NOT NULL", "changes_proceeding_state_idx", "ingest_id bigserial UNIQUE", "monitor_state", "mode text NOT NULL", "source_count integer NOT NULL CHECK (source_count >= 1)"):
-            self.assertIn(required, migration)
+        baseline = Path("migrations/001_initial.sql").read_text()
+        upgrade = Path("migrations/002_change_marker.sql").read_text()
+        for required in ("source_id text PRIMARY KEY", "ingest_id bigserial UNIQUE", "monitor_state", "mode text NOT NULL", "source_count integer NOT NULL CHECK (source_count BETWEEN 1 AND 500)"):
+            self.assertIn(required, baseline)
+        for required in ("ALTER TABLE changes ADD COLUMN IF NOT EXISTS change_marker text", "changes_proceeding_state_idx", "CHECK (source_count >= 1)"):
+            self.assertIn(required, upgrade)
         repository = Path("replik_monitor/db.py").read_text()
         for required in ("initial_baseline_started_at", "initial_baseline_complete_at", "ON CONFLICT (name) DO NOTHING RETURNING name"):
             self.assertIn(required, repository)
