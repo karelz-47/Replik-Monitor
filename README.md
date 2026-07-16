@@ -15,7 +15,7 @@ The client reconciles every stable, paginated `getKonaniePodlaICO` page for the 
 
 ## Safety controls
 
-- PostgreSQL owns migrations, an advisory poll lock, source-identity deduplication, durable outbox retry, and a stable per-outbox delivery key. The HTTP adapter sends that key as Resend's `Idempotency-Key`; the optional SMTP adapter uses it in a deterministic `Message-ID` but SMTP cannot provide an equivalent provider-side deduplication guarantee.
+- PostgreSQL owns migrations, an advisory poll lock, source-identity deduplication, durable outbox retry, and a stable per-outbox delivery key. The HTTP adapter sends that key as Resend's `Idempotency-Key`; the optional SMTP adapter sends the exact same value as Resend's documented `Resend-Idempotency-Key` custom SMTP header, while retaining a deterministic `Message-ID` for correlation.
 - `MONITOR_HISTORICAL_BATCH_LIMIT` controls `VysledkovNaStranku` (default `100`, range `1..100`). Every `getKonaniePodlaICO` page is reconciled; `VysledkovCelkom` may exceed 500 without being treated as an error. The client accepts a snapshot only after two full collections have identical ordered proceeding identity/state sequences; page-total, duplicate, short-page, or cross-collection mismatch retries a bounded number of times and then fails closed.
 - The first successful poll transactionally claims one historical baseline. It creates one durable historical outbox item per at-most-100-record digest, in deterministic sorted order; all records are persisted before delivery. Each item retries with its own durable outbox ID, and incremental polling remains blocked until every historical item is sent—there is no unbounded initial email and no silent omission.
 - `changes` deduplicates on proceeding ID plus a canonical public-state marker, so overlap polling cannot resend an unchanged state but does preserve later proceeding events.
@@ -44,7 +44,7 @@ Optional names:
 
 Resend's authoritative [SMTP documentation](https://resend.com/docs/send-with-smtp) (accessed 2026-07-16) specifies host `smtp.resend.com`, username `resend`, and the existing Resend API key as the SMTP password. It classifies ports `465`/`2465` as implicit TLS and `25`/`587`/`2587` as STARTTLS. No additional credential is configured or logged.
 
-`EMAIL_TRANSPORT=api` remains the safe backward-compatible default. SMTP is an explicit deployment choice for environments where the HTTP API is unavailable. SMTP has no Resend HTTP `Idempotency-Key` equivalent: the durable outbox ID becomes a stable RFC `Message-ID`, which aids correlation/deduplication by receiving systems but cannot prevent a duplicate when a server accepts a message just before a process/network failure. The durable retry loop intentionally treats any SMTP exception or recipient refusal as unsent and retries it.
+`EMAIL_TRANSPORT=api` remains the safe backward-compatible default. SMTP is an explicit deployment choice for environments where the HTTP API is unavailable. Resend documents `Resend-Idempotency-Key` as the SMTP equivalent of its HTTP `Idempotency-Key`; the adapter sends the exact durable outbox ID in that header for provider-side deduplication and retains a stable RFC `Message-ID` for correlation. The durable retry loop intentionally treats any SMTP exception or recipient refusal as unsent and retries it.
 
 Values belong only in approved deployment configuration, never in this artifact, tickets, shell history, or logs.
 

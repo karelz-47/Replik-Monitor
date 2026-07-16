@@ -46,10 +46,9 @@ class ResendAdapter:
 class ResendSmtpAdapter:
     """Resend SMTP adapter using an API key as the documented SMTP password.
 
-    SMTP does not provide Resend's HTTP idempotency guarantee. A deterministic
-    Message-ID gives recipients and downstream systems a stable correlation key,
-    but an interrupted SMTP transaction can still be accepted remotely before this
-    process observes success and may therefore be retried by the durable outbox.
+    Resend's documented ``Resend-Idempotency-Key`` SMTP header carries the stable
+    outbox delivery key for provider-side deduplication. A deterministic Message-ID
+    remains useful for recipient and downstream-system correlation.
     """
 
     username = "resend"
@@ -75,6 +74,7 @@ class ResendSmtpAdapter:
         message["To"] = self.recipient
         message["Subject"] = subject
         message["Message-ID"] = message_id
+        message["Resend-Idempotency-Key"] = idempotency_key
         message.set_content(text)
         context = self._ssl_context_factory()
 

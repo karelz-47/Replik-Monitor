@@ -87,7 +87,7 @@ class DeliveryAdapterTests(unittest.TestCase):
         with self.assertRaises(HTTPError):
             adapter.send("subject", "body", "outbox-42")
 
-    def test_smtp_implicit_tls_success_uses_stable_message_id(self):
+    def test_smtp_implicit_tls_success_uses_stable_outbox_idempotency_key(self):
         connections = []
 
         def factory(*args, **kwargs):
@@ -108,6 +108,7 @@ class DeliveryAdapterTests(unittest.TestCase):
         self.assertIsNotNone(connection.ssl_context)
         self.assertIsNone(connection.started_tls)
         self.assertEqual("<replik-outbox-outbox-42@replik-monitor.invalid>", connection.message["Message-ID"])
+        self.assertEqual("outbox-42", connection.message["Resend-Idempotency-Key"])
 
     def test_smtp_starttls_and_failure_propagate_for_durable_retry(self):
         connections = []
