@@ -5,9 +5,22 @@ import json
 from .client import ReplikSoapClient
 from .config import Settings
 from .db import ExpiredMonitorError, PostgresRepository
-from .delivery import ResendAdapter
+from .delivery import ResendAdapter, ResendSmtpAdapter
 from .http import serve
 from .service import poll_once, utcnow
+
+
+def delivery_adapter(settings: Settings):
+    if settings.email_transport == "smtp":
+        return ResendSmtpAdapter(
+            settings.resend_api_key,
+            settings.resend_from,
+            settings.alert_to,
+            settings.resend_smtp_host,
+            settings.resend_smtp_port,
+            settings.resend_smtp_security,
+        )
+    return ResendAdapter(settings.resend_api_key, settings.resend_from, settings.alert_to)
 
 
 def main() -> None:
@@ -33,7 +46,7 @@ def main() -> None:
                 print(json.dumps(poll_once(client, repository, settings, utcnow())))
             return
         repository.ensure_active(settings.expires_at, utcnow())
-        adapter = ResendAdapter(settings.resend_api_key, settings.resend_from, settings.alert_to)
+        adapter = delivery_adapter(settings)
         print(json.dumps({"delivered": repository.deliver_pending(adapter, utcnow())}))
     except ExpiredMonitorError as exc:
         print(json.dumps({"status": "expired", "detail": str(exc)}))

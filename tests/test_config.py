@@ -19,6 +19,29 @@ class ConfigurationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "1..100"):
                 Settings.from_env()
 
+    def test_email_transport_defaults_to_api_and_validates_resend_smtp_modes(self):
+        with patch.dict(os.environ, self.env(), clear=True):
+            settings = Settings.from_env()
+        self.assertEqual("api", settings.email_transport)
+        self.assertEqual("smtp.resend.com", settings.resend_smtp_host)
+        self.assertEqual(465, settings.resend_smtp_port)
+        self.assertEqual("implicit_tls", settings.resend_smtp_security)
+
+        smtp_env = self.env() | {
+            "EMAIL_TRANSPORT": "smtp",
+            "RESEND_SMTP_PORT": "587",
+            "RESEND_SMTP_SECURITY": "starttls",
+        }
+        with patch.dict(os.environ, smtp_env, clear=True):
+            settings = Settings.from_env()
+        self.assertEqual("smtp", settings.email_transport)
+        self.assertEqual(587, settings.resend_smtp_port)
+
+        invalid = self.env() | {"EMAIL_TRANSPORT": "smtp", "RESEND_SMTP_PORT": "587"}
+        with patch.dict(os.environ, invalid, clear=True):
+            with self.assertRaisesRegex(ValueError, "implicit_tls requires"):
+                Settings.from_env()
+
     def test_deadline_cannot_be_more_than_one_month_away(self):
         env = self.env() | {"MONITOR_EXPIRES_AT": (datetime.now(UTC) + timedelta(days=32)).isoformat()}
         with patch.dict(os.environ, env, clear=True):
